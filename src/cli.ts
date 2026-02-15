@@ -1,6 +1,46 @@
+import { readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import type { PluginApi, StamnConfig } from './types.js';
 import { runDeviceLogin } from './auth.js';
 import { getClient } from './service.js';
+
+function getConfigPath(): string {
+  return join(homedir(), '.openclaw', 'openclaw.json');
+}
+
+function writeStamnConfig(result: {
+  apiKey: string;
+  agentId: string;
+  agentName: string;
+  serverUrl: string;
+}): void {
+  const configPath = getConfigPath();
+  let config: Record<string, any> = {};
+
+  try {
+    const raw = readFileSync(configPath, 'utf-8');
+    config = JSON.parse(raw);
+  } catch {
+    // File doesn't exist or invalid — start fresh
+  }
+
+  // Ensure nested structure exists
+  if (!config.plugins) config.plugins = {};
+  if (!config.plugins.entries) config.plugins.entries = {};
+  if (!config.plugins.entries.stamn) config.plugins.entries.stamn = {};
+
+  config.plugins.entries.stamn.enabled = true;
+  config.plugins.entries.stamn.config = {
+    ...config.plugins.entries.stamn.config,
+    serverUrl: result.serverUrl,
+    apiKey: result.apiKey,
+    agentId: result.agentId,
+    agentName: result.agentName,
+  };
+
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+}
 
 export function registerStamnCli(api: PluginApi, config: StamnConfig): void {
   api.registerCli(
@@ -17,17 +57,19 @@ export function registerStamnCli(api: PluginApi, config: StamnConfig): void {
             console.log('Starting Stamn device login...');
             const result = await runDeviceLogin(opts.server, opts.name);
 
+            writeStamnConfig({
+              apiKey: result.apiKey,
+              agentId: result.agentId,
+              agentName: result.agentName,
+              serverUrl: opts.server,
+            });
+
             console.log();
             console.log(`  Agent "${result.agentName}" registered.`);
             console.log(`  Agent ID: ${result.agentId}`);
+            console.log(`  Config written to ${getConfigPath()}`);
             console.log();
-            console.log('  Add these to your openclaw.json under plugins.entries.stamn.config:');
-            console.log();
-            console.log(`    "apiKey": "${result.apiKey}",`);
-            console.log(`    "agentId": "${result.agentId}",`);
-            console.log(`    "agentName": "${result.agentName}"`);
-            console.log();
-            console.log('  Then restart the gateway.');
+            console.log('  Restart the gateway to connect: openclaw gateway restart');
           } catch (err) {
             console.error(`Login failed: ${(err as Error).message}`);
             process.exitCode = 1;
