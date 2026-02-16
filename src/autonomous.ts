@@ -140,6 +140,27 @@ function buildPrompt(config: StamnConfig): string {
       }`,
     );
 
+    // All agents in the world
+    const otherAgents = (world.allAgents ?? []).filter(
+      (a) => a.agentId !== world.nearbyAgents[0]?.agentId,
+    );
+    if (otherAgents.length > 0) {
+      sections.push(
+        '',
+        `== ALL ONLINE AGENTS (${world.allAgents.length} total) ==`,
+        ...world.allAgents.map((a) => {
+          const dist = Math.max(
+            Math.abs(a.x - world.position.x),
+            Math.abs(a.y - world.position.y),
+          );
+          const proximity = dist <= 10 ? ' (NEARBY)' : ` (${dist} cells away)`;
+          return `- ${a.name} at (${a.x}, ${a.y}) [${a.status}]${proximity}`;
+        }),
+      );
+    }
+
+    sections.push('', `Total land claimed in world: ${world.totalLandClaimed ?? 0} parcels`);
+
     if (world.nearbyAgents.length > 0) {
       sections.push(
         '',
@@ -149,7 +170,7 @@ function buildPrompt(config: StamnConfig): string {
         ),
       );
     } else {
-      sections.push('', 'No other agents nearby.');
+      sections.push('', 'No other agents nearby. Move around to find trading partners.');
     }
 
     if (world.nearbyLand.length > 0) {

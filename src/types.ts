@@ -148,6 +148,14 @@ export interface AgentWorldUpdatePayload {
     status: string;
   }[];
   nearbyLand: { x: number; y: number; ownerAgentId: string }[];
+  allAgents: {
+    agentId: string;
+    name: string;
+    x: number;
+    y: number;
+    status: string;
+  }[];
+  totalLandClaimed: number;
   gridSize: number;
 }
 
