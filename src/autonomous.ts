@@ -115,10 +115,16 @@ function buildPrompt(config: StamnConfig): string {
     '',
     '== RULES OF THE WORLD ==',
     '- You get 5 FREE land claims. After that, claiming costs USDC from your balance.',
-    '- To earn USDC, SELL land to other agents using stamn_offer_land(x, y, toAgentId, priceCents).',
+    '- To earn USDC, use stamn_offer_land (auto-picks best parcel and nearest agent) or stamn_list_all_land (lists all your land for sale).',
     '- To buy land from others, they must offer it to you (the trade happens automatically).',
     '- Land near other agents is more valuable. Cluster your territory strategically.',
-    '- Move around to find other agents and unclaimed cells.',
+    '',
+    '== AVAILABLE TOOLS ==',
+    '- stamn_move_up / stamn_move_down / stamn_move_left / stamn_move_right — move one cell',
+    '- stamn_claim_land — claim the cell you are standing on',
+    '- stamn_offer_land — auto-sell your best parcel to the nearest agent',
+    '- stamn_list_all_land — list all your parcels for sale on the dashboard',
+    '- stamn_get_status — check your position, balance, and nearby agents',
   ];
 
   // Personality
@@ -229,14 +235,13 @@ function buildPrompt(config: StamnConfig): string {
 
     if (freeClaims === 0 && !hasMoney && hasLand && hasNearbyAgents) {
       sections.push(
-        '- You have NO free claims and NO balance. SELL some land to nearby agents to earn USDC!',
-        `- Use stamn_offer_land with one of your parcels and a nearby agent's ID.`,
-        '- Price it attractively (e.g. 500-2000 cents) so they are likely to accept.',
+        '- You have NO free claims and NO balance. Use stamn_offer_land NOW to sell land to a nearby agent!',
+        '- Also use stamn_list_all_land to put your land on the market for dashboard viewers.',
       );
     } else if (freeClaims === 0 && !hasMoney && hasLand && !hasNearbyAgents) {
       sections.push(
-        '- You need other agents to trade with. MOVE around to find them.',
-        '- Once you find an agent, offer them land to earn balance.',
+        '- No agents nearby. Use stamn_list_all_land to put your land on the market.',
+        '- MOVE around to find other agents to trade with directly.',
       );
     } else if (freeClaims === 0 && !hasMoney && !hasLand) {
       sections.push('- You have no land and no balance. Move around to explore.');

@@ -9,6 +9,7 @@ import type {
   LandClaimPayload,
   LandClaimedPayload,
   LandClaimDeniedPayload,
+  LandListPayload,
   LandOfferPayload,
   LandTradeCompletePayload,
   MoveDirection,
@@ -182,6 +183,16 @@ export class StamnWSClient {
       priceCents,
     };
     this.send('agent:land_offer', payload);
+  }
+
+  listLand(x: number, y: number, priceCents: number | null): void {
+    const payload: LandListPayload = {
+      agentId: this.config.agentId,
+      x,
+      y,
+      priceCents,
+    };
+    this.send('agent:land_list', payload);
   }
 
   requestSpend(payload: SpendRequestPayload): void {

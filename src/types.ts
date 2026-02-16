@@ -41,6 +41,13 @@ export interface LandOfferPayload {
   priceCents: number;
 }
 
+export interface LandListPayload {
+  agentId: string;
+  x: number;
+  y: number;
+  priceCents: number | null;
+}
+
 export interface SpendRequestPayload {
   requestId: string;
   amountCents: number;

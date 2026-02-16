@@ -8,96 +8,73 @@ function toolResult(text: string) {
   return { content: [{ type: 'text' as const, text }] };
 }
 
-/** Try every reasonable way to extract a direction from args */
-function extractDirection(args: Record<string, unknown>, valid: MoveDirection[]): MoveDirection | null {
-  // Direct property access
-  const candidates = [args.direction, args.dir, args.d, args.move];
+/** Shared move logic — direction is hardcoded per tool, no args needed */
+async function doMove(direction: MoveDirection) {
+  const client = getClient();
+  if (!client?.isConnected) return toolResult('Not connected to Stamn server.');
 
-  // First value in the object
-  const values = Object.values(args);
-  if (values.length > 0) candidates.push(values[0]);
+  client.move(direction);
 
-  // Try stringified whole object (model might pass {"direction":"up"} as a string)
-  candidates.push(args);
-
-  for (const raw of candidates) {
-    if (raw == null) continue;
-    const str = (typeof raw === 'string' ? raw : typeof raw === 'object' ? JSON.stringify(raw) : String(raw))
-      .toLowerCase().trim();
-    // Try direct match
-    if (valid.includes(str as MoveDirection)) return str as MoveDirection;
-    // Try to find a direction word inside the string
-    for (const dir of valid) {
-      if (str.includes(dir)) return dir;
-    }
+  // Wait briefly for world update so we can report new position
+  await new Promise((r) => setTimeout(r, 500));
+  const world = worldTracker.getWorld();
+  if (world) {
+    const onUnclaimed = !world.nearbyLand.some(
+      (l) => l.x === world.position.x && l.y === world.position.y,
+    );
+    return toolResult(
+      `Moved ${direction}. Now at (${world.position.x}, ${world.position.y}).${onUnclaimed ? ' This cell is UNCLAIMED — you can claim it.' : ''}`,
+    );
   }
-
-  return null;
+  return toolResult(`Moved ${direction}.`);
 }
 
 /**
  * Register Stamn actions as agent tools so the AI can call them
  * during its reasoning loop (via OpenAI function calling protocol).
  *
- * These are different from auto-reply commands (registerCommand) —
- * agent tools are invoked BY the AI, not by users typing slash commands.
+ * IMPORTANT: Tools that need parameters are broken in the current OpenClaw
+ * build (tool call IDs get passed instead of actual args). So movement is
+ * split into 4 zero-parameter tools, and offer_land auto-selects the best trade.
  */
 export function registerAgentTools(api: PluginApi): void {
+  // ── Movement (4 separate zero-param tools) ─────────────────────────────
+
   api.registerTool({
-    name: 'stamn_move',
-    description:
-      'Move your agent on the Stamn 100x100 world grid. Returns confirmation or error.',
-    parameters: {
-      type: 'object',
-      properties: {
-        direction: {
-          type: 'string',
-          description: 'Direction to move',
-          enum: ['up', 'down', 'left', 'right'],
-        },
-      },
-      required: ['direction'],
-    },
-    execute: async (args) => {
-      const client = getClient();
-      if (!client?.isConnected) return toolResult('Not connected to Stamn server.');
-
-      // Handle various arg formats from different AI models
-      const valid: MoveDirection[] = ['up', 'down', 'left', 'right'];
-      const direction = extractDirection(args, valid);
-
-      console.log('[stamn_move] args:', JSON.stringify(args), '→ direction:', direction);
-
-      if (!direction) {
-        return toolResult(`Invalid direction. Use: up, down, left, right. (received args: ${JSON.stringify(args)})`);
-      }
-
-      client.move(direction);
-
-      // Wait briefly for world update so we can report new position
-      await new Promise((r) => setTimeout(r, 500));
-      const world = worldTracker.getWorld();
-      if (world) {
-        const onUnclaimed = !world.nearbyLand.some(
-          (l) => l.x === world.position.x && l.y === world.position.y,
-        );
-        return toolResult(
-          `Moved ${direction}. Now at (${world.position.x}, ${world.position.y}).${onUnclaimed ? ' This cell is UNCLAIMED — you can claim it.' : ''}`,
-        );
-      }
-      return toolResult(`Moved ${direction}.`);
-    },
+    name: 'stamn_move_up',
+    description: 'Move your agent UP (north) on the world grid.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async () => doMove('up'),
   });
+
+  api.registerTool({
+    name: 'stamn_move_down',
+    description: 'Move your agent DOWN (south) on the world grid.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async () => doMove('down'),
+  });
+
+  api.registerTool({
+    name: 'stamn_move_left',
+    description: 'Move your agent LEFT (west) on the world grid.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async () => doMove('left'),
+  });
+
+  api.registerTool({
+    name: 'stamn_move_right',
+    description: 'Move your agent RIGHT (east) on the world grid.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async () => doMove('right'),
+  });
+
+  // ── Land claiming ──────────────────────────────────────────────────────
 
   api.registerTool({
     name: 'stamn_claim_land',
     description:
       'Claim the land parcel at your current position on the grid. Only works on unclaimed cells. Returns the result (success or denial with reason).',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
+    parameters: { type: 'object', properties: {}, required: [] },
     execute: async () => {
       const client = getClient();
       if (!client?.isConnected) return toolResult('Not connected to Stamn server.');
@@ -124,47 +101,128 @@ export function registerAgentTools(api: PluginApi): void {
         );
       }
 
-      // Provide actionable context on denial
       const lines = [`Land claim denied: ${result.reason} (${result.code}).`];
       if (result.code === 'already_owned' && world) {
         lines.push(`Cell (${world.position.x}, ${world.position.y}) is already owned. Move to an unclaimed cell.`);
       } else if (result.code === 'insufficient_balance' && world) {
         lines.push(`Your balance: ${world.balanceCents} cents. You own ${world.ownedLand.length} parcels (free claims may be exhausted).`);
-        lines.push('Move and claim unclaimed cells, or earn more balance.');
+        lines.push('Sell land to other agents to earn USDC, then claim more.');
       }
       return toolResult(lines.join('\n'));
     },
   });
 
+  // ── Smart land offer (zero params — auto-picks best trade) ─────────────
+
   api.registerTool({
     name: 'stamn_offer_land',
-    description: 'Offer to sell a land parcel you own to another agent at a specified price.',
-    parameters: {
-      type: 'object',
-      properties: {
-        x: { type: 'string', description: 'X coordinate of the land parcel' },
-        y: { type: 'string', description: 'Y coordinate of the land parcel' },
-        toAgentId: { type: 'string', description: 'UUID of the agent to sell to' },
-        priceCents: { type: 'string', description: 'Price in cents (e.g. 500 = $5.00)' },
-      },
-      required: ['x', 'y', 'toAgentId', 'priceCents'],
-    },
-    execute: async (args) => {
+    description:
+      'Automatically offer your best land parcel to the nearest agent at a fair price. Picks the parcel closest to the buyer and prices it based on distance. No parameters needed.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async () => {
       const client = getClient();
       if (!client?.isConnected) return toolResult('Not connected to Stamn server.');
 
-      const x = parseInt(args.x as string, 10);
-      const y = parseInt(args.y as string, 10);
-      const priceCents = parseInt(args.priceCents as string, 10);
+      const world = worldTracker.getWorld();
+      if (!world) return toolResult('No world data yet. Wait for a world update.');
 
-      if (isNaN(x) || isNaN(y) || isNaN(priceCents)) {
-        return toolResult('x, y, and priceCents must be numbers.');
+      if (world.ownedLand.length === 0) {
+        return toolResult('You own no land to sell. Claim some first.');
       }
 
-      client.offerLand(x, y, args.toAgentId as string, priceCents);
-      return toolResult(`Offered land (${x}, ${y}) to ${args.toAgentId} for ${priceCents} cents.`);
+      // Find nearest agent (from allAgents, excluding self)
+      const allAgents = world.allAgents ?? [];
+      const others = allAgents.filter((a) => !world.ownedLand.some(() => false));
+      // Use nearbyAgents if available, otherwise allAgents
+      const candidates = world.nearbyAgents.length > 0
+        ? world.nearbyAgents
+        : allAgents.filter((a) => {
+            // Exclude self — if agent's position matches ours and they're not in nearbyAgents
+            return !(a.x === world.position.x && a.y === world.position.y && a.name === world.nearbyAgents[0]?.name);
+          });
+
+      if (candidates.length === 0) {
+        return toolResult(
+          `No other agents found to trade with. ${allAgents.length} agent(s) total online. Move around to find trading partners.`,
+        );
+      }
+
+      // Pick the closest other agent
+      let bestAgent = candidates[0];
+      let bestDist = Infinity;
+      for (const agent of candidates) {
+        const dist = Math.abs(agent.x - world.position.x) + Math.abs(agent.y - world.position.y);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestAgent = agent;
+        }
+      }
+
+      // Pick the parcel closest to the buyer
+      let bestParcel = world.ownedLand[0];
+      let bestParcelDist = Infinity;
+      for (const parcel of world.ownedLand) {
+        const dist = Math.abs(parcel.x - bestAgent.x) + Math.abs(parcel.y - bestAgent.y);
+        if (dist < bestParcelDist) {
+          bestParcelDist = dist;
+          bestParcel = parcel;
+        }
+      }
+
+      // Price based on proximity — closer land is worth more
+      const basePriceCents = bestParcelDist <= 5 ? 500 : bestParcelDist <= 15 ? 200 : 100;
+
+      client.offerLand(bestParcel.x, bestParcel.y, bestAgent.agentId, basePriceCents);
+
+      return toolResult(
+        `Offered land (${bestParcel.x}, ${bestParcel.y}) to ${bestAgent.name} (${bestDist} cells away) for ${basePriceCents} cents ($${(basePriceCents / 100).toFixed(2)}).`,
+      );
     },
   });
+
+  // ── List all owned land for sale ───────────────────────────────────────
+
+  api.registerTool({
+    name: 'stamn_list_all_land',
+    description:
+      'List ALL your owned land parcels for sale at a fair price based on location. Dashboard viewers and other agents will see the listings.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async () => {
+      const client = getClient();
+      if (!client?.isConnected) return toolResult('Not connected to Stamn server.');
+
+      const world = worldTracker.getWorld();
+      if (!world) return toolResult('No world data yet.');
+
+      if (world.ownedLand.length === 0) {
+        return toolResult('You own no land to list.');
+      }
+
+      // List each parcel with a price based on proximity to center / other agents
+      const listed: string[] = [];
+      for (const parcel of world.ownedLand) {
+        // Base price: 200 cents, +100 if near center, +100 if near other agents
+        let priceCents = 200;
+        const distToCenter = Math.abs(parcel.x - 50) + Math.abs(parcel.y - 50);
+        if (distToCenter < 30) priceCents += 100;
+
+        for (const agent of (world.allAgents ?? [])) {
+          const dist = Math.abs(parcel.x - agent.x) + Math.abs(parcel.y - agent.y);
+          if (dist <= 10) {
+            priceCents += 100;
+            break;
+          }
+        }
+
+        client.listLand(parcel.x, parcel.y, priceCents);
+        listed.push(`(${parcel.x}, ${parcel.y}) at ${priceCents} cents`);
+      }
+
+      return toolResult(`Listed ${listed.length} parcels for sale:\n${listed.join('\n')}`);
+    },
+  });
+
+  // ── Spend (kept for future use, but params may not work) ───────────────
 
   api.registerTool({
     name: 'stamn_spend',
@@ -202,15 +260,13 @@ export function registerAgentTools(api: PluginApi): void {
     },
   });
 
+  // ── Status ─────────────────────────────────────────────────────────────
+
   api.registerTool({
     name: 'stamn_get_status',
     description:
-      'Get your current Stamn agent status: connection state, agent ID, and server info.',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
+      'Get your current Stamn agent status: connection state, position, balance, land, and nearby agents.',
+    parameters: { type: 'object', properties: {}, required: [] },
     execute: async () => {
       const client = getClient();
       if (!client) return toolResult('Stamn plugin not initialized. Check config.');
@@ -225,6 +281,7 @@ export function registerAgentTools(api: PluginApi): void {
         `Balance: ${world.balanceCents} cents`,
         `Owned land: ${world.ownedLand.length} parcels`,
         `Nearby agents: ${world.nearbyAgents.length}`,
+        `Total agents online: ${world.allAgents?.length ?? 'unknown'}`,
       ];
       return toolResult(lines.join('\n'));
     },
