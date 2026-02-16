@@ -111,7 +111,14 @@ function buildPrompt(config: StamnConfig): string {
   const events = worldTracker.getRecentEvents();
 
   const sections: string[] = [
-    'You are an autonomous agent in the Stamn world — a 100x100 grid where AI agents compete for territory.',
+    'You are an autonomous agent in the Stamn world — a 100x100 grid where AI agents compete for territory and trade land.',
+    '',
+    '== RULES OF THE WORLD ==',
+    '- You get 5 FREE land claims. After that, claiming costs USDC from your balance.',
+    '- To earn USDC, SELL land to other agents using stamn_offer_land(x, y, toAgentId, priceCents).',
+    '- To buy land from others, they must offer it to you (the trade happens automatically).',
+    '- Land near other agents is more valuable. Cluster your territory strategically.',
+    '- Move around to find other agents and unclaimed cells.',
   ];
 
   // Personality
@@ -181,12 +188,49 @@ function buildPrompt(config: StamnConfig): string {
     );
   }
 
-  sections.push(
-    '',
-    'It is time to decide your next action. Use your stamn tools.',
-    'Consider: moving to explore, claiming unclaimed land, trading with nearby agents.',
-    'Pick ONE action and execute it now. Be decisive.',
-  );
+  // Situational advice
+  sections.push('', '== WHAT TO DO NOW ==');
+
+  if (world) {
+    const freeClaims = Math.max(0, 5 - world.ownedLand.length);
+    const hasMoney = world.balanceCents > 0;
+    const hasLand = world.ownedLand.length > 0;
+    const hasNearbyAgents = world.nearbyAgents.length > 0;
+    const standingOnUnclaimed = !world.nearbyLand.some(
+      (l) => l.x === world.position.x && l.y === world.position.y,
+    );
+
+    if (freeClaims > 0 && standingOnUnclaimed) {
+      sections.push(`- You have ${freeClaims} free claims left. CLAIM this unclaimed cell!`);
+    } else if (freeClaims > 0) {
+      sections.push(`- You have ${freeClaims} free claims left. Move to find unclaimed land.`);
+    }
+
+    if (freeClaims === 0 && !hasMoney && hasLand && hasNearbyAgents) {
+      sections.push(
+        '- You have NO free claims and NO balance. SELL some land to nearby agents to earn USDC!',
+        `- Use stamn_offer_land with one of your parcels and a nearby agent's ID.`,
+        '- Price it attractively (e.g. 500-2000 cents) so they are likely to accept.',
+      );
+    } else if (freeClaims === 0 && !hasMoney && hasLand && !hasNearbyAgents) {
+      sections.push(
+        '- You need other agents to trade with. MOVE around to find them.',
+        '- Once you find an agent, offer them land to earn balance.',
+      );
+    } else if (freeClaims === 0 && !hasMoney && !hasLand) {
+      sections.push('- You have no land and no balance. Move around to explore.');
+    }
+
+    if (hasMoney && standingOnUnclaimed) {
+      sections.push('- You can BUY this cell — claim it with stamn_claim_land.');
+    }
+
+    if (hasNearbyAgents && hasLand) {
+      sections.push('- Nearby agents are potential trade partners. Consider offering land.');
+    }
+  }
+
+  sections.push('', 'Pick ONE action and execute it. Be decisive.');
 
   return sections.join('\n');
 }

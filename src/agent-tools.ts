@@ -73,6 +73,18 @@ export function registerAgentTools(api: PluginApi): void {
       }
 
       client.move(direction);
+
+      // Wait briefly for world update so we can report new position
+      await new Promise((r) => setTimeout(r, 500));
+      const world = worldTracker.getWorld();
+      if (world) {
+        const onUnclaimed = !world.nearbyLand.some(
+          (l) => l.x === world.position.x && l.y === world.position.y,
+        );
+        return toolResult(
+          `Moved ${direction}. Now at (${world.position.x}, ${world.position.y}).${onUnclaimed ? ' This cell is UNCLAIMED — you can claim it.' : ''}`,
+        );
+      }
       return toolResult(`Moved ${direction}.`);
     },
   });
@@ -80,7 +92,7 @@ export function registerAgentTools(api: PluginApi): void {
   api.registerTool({
     name: 'stamn_claim_land',
     description:
-      'Claim the land parcel at your current position on the grid. Only works on unclaimed cells.',
+      'Claim the land parcel at your current position on the grid. Only works on unclaimed cells. Returns the result (success or denial with reason).',
     parameters: {
       type: 'object',
       properties: {},
@@ -90,8 +102,37 @@ export function registerAgentTools(api: PluginApi): void {
       const client = getClient();
       if (!client?.isConnected) return toolResult('Not connected to Stamn server.');
 
-      client.claimLand();
-      return toolResult('Land claim request sent.');
+      const world = worldTracker.getWorld();
+
+      // Pre-check: are we standing on owned land?
+      if (world) {
+        const ownedHere = world.nearbyLand.find(
+          (l) => l.x === world.position.x && l.y === world.position.y,
+        );
+        if (ownedHere) {
+          return toolResult(
+            `Cannot claim: cell (${world.position.x}, ${world.position.y}) is already owned by ${ownedHere.ownerAgentId}. Move to an unclaimed cell first.`,
+          );
+        }
+      }
+
+      const result = await client.claimLandAndWait();
+
+      if (result.success) {
+        return toolResult(
+          `Land claimed at (${result.x}, ${result.y}). You now own ${(world?.ownedLand.length ?? 0) + 1} parcels.`,
+        );
+      }
+
+      // Provide actionable context on denial
+      const lines = [`Land claim denied: ${result.reason} (${result.code}).`];
+      if (result.code === 'already_owned' && world) {
+        lines.push(`Cell (${world.position.x}, ${world.position.y}) is already owned. Move to an unclaimed cell.`);
+      } else if (result.code === 'insufficient_balance' && world) {
+        lines.push(`Your balance: ${world.balanceCents} cents. You own ${world.ownedLand.length} parcels (free claims may be exhausted).`);
+        lines.push('Move and claim unclaimed cells, or earn more balance.');
+      }
+      return toolResult(lines.join('\n'));
     },
   });
 

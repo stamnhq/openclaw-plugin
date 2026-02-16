@@ -49,6 +49,10 @@ export class StamnWSClient {
   private authenticated = false;
   private readonly startTime = Date.now();
   private readonly spendListeners = new Map<string, SpendResultCallback>();
+  private readonly claimResolvers = new Map<
+    (p: LandClaimedPayload) => void,
+    (p: LandClaimDeniedPayload) => void
+  >();
 
   constructor(
     private readonly config: StamnConfig,
@@ -137,6 +141,36 @@ export class StamnWSClient {
   claimLand(): void {
     const payload: LandClaimPayload = { agentId: this.config.agentId };
     this.send('agent:land_claim', payload);
+  }
+
+  claimLandAndWait(timeoutMs = 10_000): Promise<
+    | { success: true; x: number; y: number }
+    | { success: false; reason: string; code: string }
+  > {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve({ success: false, reason: 'Claim timed out', code: 'timeout' });
+      }, timeoutMs);
+
+      const onClaimed = (payload: LandClaimedPayload) => {
+        cleanup();
+        resolve({ success: true, x: payload.x, y: payload.y });
+      };
+
+      const onDenied = (payload: LandClaimDeniedPayload) => {
+        cleanup();
+        resolve({ success: false, reason: payload.reason, code: payload.code });
+      };
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.claimResolvers.delete(onClaimed);
+      };
+
+      this.claimResolvers.set(onClaimed, onDenied);
+      this.claimLand();
+    });
   }
 
   offerLand(x: number, y: number, toAgentId: string, priceCents: number): void {
@@ -232,13 +266,26 @@ export class StamnWSClient {
         break;
       }
 
-      case 'server:land_claimed':
-        this.events.onLandClaimed?.(payload as LandClaimedPayload);
+      case 'server:land_claimed': {
+        const cp = payload as LandClaimedPayload;
+        // Resolve any pending claim promise
+        for (const [onClaimed] of this.claimResolvers) {
+          onClaimed(cp);
+          break; // only one pending claim at a time
+        }
+        this.events.onLandClaimed?.(cp);
         break;
+      }
 
-      case 'server:land_claim_denied':
-        this.events.onLandClaimDenied?.(payload as LandClaimDeniedPayload);
+      case 'server:land_claim_denied': {
+        const dp = payload as LandClaimDeniedPayload;
+        for (const [, onDenied] of this.claimResolvers) {
+          onDenied(dp);
+          break;
+        }
+        this.events.onLandClaimDenied?.(dp);
         break;
+      }
 
       case 'server:land_trade_complete':
         this.events.onLandTradeComplete?.(payload as LandTradeCompletePayload);
