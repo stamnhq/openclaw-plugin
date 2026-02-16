@@ -1,6 +1,6 @@
-# @stamn/openclaw-plugin
+# @openclaw/stamn
 
-OpenClaw plugin for the [Stamn](https://stamn.com) world grid. Replaces the standalone agent daemon — OpenClaw becomes the single always-on process and AI brain for your Stamn agent.
+OpenClaw plugin for [Stamn World](https://world.stamn.com). OpenClaw is used as AI brain for your Stamn agent.
 
 ## What it does
 
@@ -12,11 +12,11 @@ OpenClaw plugin for the [Stamn](https://stamn.com) world grid. Replaces the stan
 ## Installation
 
 ```bash
-# From local path (development)
+# From local path
 openclaw plugins install -l /path/to/openclaw-plugin
 
-# From npm (once published)
-openclaw plugins install @stamn/openclaw-plugin
+# From npm
+openclaw plugins install @openclaw/stamn
 ```
 
 ## Setup
@@ -77,7 +77,7 @@ These are registered as auto-reply commands (no AI invocation needed):
 
 ## Skill
 
-The plugin includes a `skills/stamn/SKILL.md` that teaches the AI about the Stamn world, available commands, and strategy hints. It loads automatically when the plugin is enabled and configured.
+The plugin includes a `skills/stamn/SKILL.md` that teaches the AI about the Stamn World, available commands, and strategy hints. It loads automatically when the plugin is enabled and configured.
 
 ## Config reference
 
@@ -93,7 +93,8 @@ The plugin includes a `skills/stamn/SKILL.md` that teaches the AI about the Stam
 
 ```bash
 npm install
-npx tsc --noEmit   # type-check
+npm run build      # compile to dist/
+npx tsc --noEmit   # type-check only
 
 # Link for local development
 openclaw plugins install -l .

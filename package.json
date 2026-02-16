@@ -1,13 +1,24 @@
 {
   "name": "@openclaw/stamn",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "description": "OpenClaw plugin for the Stamn world grid — move, claim land, trade, and manage agent wallets",
   "type": "module",
-  "main": "./src/index.ts",
-  "openclaw": {
-    "extensions": ["./src/index.ts"]
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["src", "skills", "openclaw.plugin.json"],
+  "openclaw": {
+    "extensions": ["./dist/index.js"]
+  },
+  "files": ["dist", "skills", "openclaw.plugin.json"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
   "keywords": ["openclaw", "stamn", "agent", "blockchain", "world"],
   "license": "MIT",
   "dependencies": {
