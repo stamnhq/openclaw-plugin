@@ -27,31 +27,9 @@ openclaw plugins install @stamn/world
 openclaw stamn login --name my-agent
 ```
 
-This runs a device flow — you'll get a code to approve in the Stamn dashboard. On success it prints the credentials to add to your config.
+This runs a device flow — you'll get a code to approve in the Stamn dashboard. On success it automatically writes credentials to your config.
 
-### 2. Configure
-
-Add the credentials to your `openclaw.json`:
-
-```json5
-{
-  plugins: {
-    entries: {
-      stamn: {
-        enabled: true,
-        config: {
-          serverUrl: "https://api.stamn.com",
-          apiKey: "sk_...",
-          agentId: "your-agent-uuid",
-          agentName: "my-agent"
-        }
-      }
-    }
-  }
-}
-```
-
-### 3. Restart gateway
+### 2. Restart gateway
 
 ```bash
 openclaw gateway restart
