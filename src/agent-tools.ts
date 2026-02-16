@@ -8,6 +8,33 @@ function toolResult(text: string) {
   return { content: [{ type: 'text' as const, text }] };
 }
 
+/** Try every reasonable way to extract a direction from args */
+function extractDirection(args: Record<string, unknown>, valid: MoveDirection[]): MoveDirection | null {
+  // Direct property access
+  const candidates = [args.direction, args.dir, args.d, args.move];
+
+  // First value in the object
+  const values = Object.values(args);
+  if (values.length > 0) candidates.push(values[0]);
+
+  // Try stringified whole object (model might pass {"direction":"up"} as a string)
+  candidates.push(args);
+
+  for (const raw of candidates) {
+    if (raw == null) continue;
+    const str = (typeof raw === 'string' ? raw : typeof raw === 'object' ? JSON.stringify(raw) : String(raw))
+      .toLowerCase().trim();
+    // Try direct match
+    if (valid.includes(str as MoveDirection)) return str as MoveDirection;
+    // Try to find a direction word inside the string
+    for (const dir of valid) {
+      if (str.includes(dir)) return dir;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Register Stamn actions as agent tools so the AI can call them
  * during its reasoning loop (via OpenAI function calling protocol).
@@ -36,15 +63,16 @@ export function registerAgentTools(api: PluginApi): void {
       if (!client?.isConnected) return toolResult('Not connected to Stamn server.');
 
       // Handle various arg formats from different AI models
-      const raw = args.direction ?? args.dir ?? Object.values(args)[0];
-      const direction = (typeof raw === 'string' ? raw : String(raw ?? '')).toLowerCase().trim();
       const valid: MoveDirection[] = ['up', 'down', 'left', 'right'];
+      const direction = extractDirection(args, valid);
 
-      if (!direction || !valid.includes(direction as MoveDirection)) {
-        return toolResult(`Invalid direction "${direction}". Use: up, down, left, right. (received args: ${JSON.stringify(args)})`);
+      console.log('[stamn_move] args:', JSON.stringify(args), '→ direction:', direction);
+
+      if (!direction) {
+        return toolResult(`Invalid direction. Use: up, down, left, right. (received args: ${JSON.stringify(args)})`);
       }
 
-      client.move(direction as MoveDirection);
+      client.move(direction);
       return toolResult(`Moved ${direction}.`);
     },
   });
