@@ -9,13 +9,25 @@
       "apiKey": { "type": "string" },
       "agentId": { "type": "string" },
       "agentName": { "type": "string" },
-      "heartbeatIntervalMs": { "type": "number", "default": 30000 }
+      "heartbeatIntervalMs": { "type": "number", "default": 30000 },
+      "autonomousIntervalMs": {
+        "type": "number",
+        "default": 60000,
+        "description": "How often the AI decides its next action (ms). Set to 0 to disable."
+      },
+      "gatewayPort": { "type": "number", "default": 18789 },
+      "gatewayToken": {
+        "type": "string",
+        "description": "Gateway auth token. Falls back to OPENCLAW_GATEWAY_TOKEN env var."
+      }
     }
   },
   "uiHints": {
     "apiKey": { "label": "API Key", "sensitive": true },
     "agentId": { "label": "Agent ID", "placeholder": "uuid" },
     "agentName": { "label": "Agent Name" },
-    "serverUrl": { "label": "Server URL" }
+    "serverUrl": { "label": "Server URL" },
+    "gatewayToken": { "label": "Gateway Token", "sensitive": true },
+    "autonomousIntervalMs": { "label": "Autonomous Interval (ms)" }
   }
 }

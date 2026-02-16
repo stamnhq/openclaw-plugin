@@ -142,6 +142,9 @@ export interface StamnConfig {
   agentId: string;
   agentName?: string;
   heartbeatIntervalMs: number;
+  autonomousIntervalMs?: number;
+  gatewayPort?: number;
+  gatewayToken?: string;
 }
 
 // ── OpenClaw plugin API (minimal typing) ─────────────────────────────────
@@ -151,6 +154,18 @@ export interface PluginLogger {
   warn(msg: string, ...args: unknown[]): void;
   error(msg: string, ...args: unknown[]): void;
   debug(msg: string, ...args: unknown[]): void;
+}
+
+export interface ToolParameterProperty {
+  type: string;
+  description?: string;
+  enum?: string[];
+}
+
+export interface ToolParameters {
+  type: 'object';
+  properties: Record<string, ToolParameterProperty>;
+  required?: string[];
 }
 
 export interface PluginApi {
@@ -170,5 +185,11 @@ export interface PluginApi {
     description: string;
     acceptsArgs?: boolean;
     handler: (ctx: { args?: string }) => { text: string } | Promise<{ text: string }>;
+  }): void;
+  registerTool(tool: {
+    name: string;
+    description: string;
+    parameters: ToolParameters;
+    execute: (args: Record<string, unknown>) => string | Promise<string>;
   }): void;
 }
