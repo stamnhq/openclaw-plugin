@@ -19,6 +19,7 @@ function resolveConfig(api: PluginApi): StamnConfig {
     autonomousIntervalMs: raw.autonomousIntervalMs,
     gatewayPort: raw.gatewayPort,
     gatewayToken: raw.gatewayToken,
+    personality: raw.personality,
   };
 }
 

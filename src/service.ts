@@ -3,6 +3,8 @@ import { join } from 'path';
 import { homedir } from 'os';
 import type { PluginLogger, StamnConfig } from './types.js';
 import { StamnWSClient } from './ws-client.js';
+import { worldTracker } from './world-state.js';
+import { triggerReactiveTick } from './autonomous.js';
 
 let client: StamnWSClient | null = null;
 
@@ -92,16 +94,46 @@ export function startStamnService(logger: PluginLogger, config: StamnConfig): vo
       logger.info(
         `Transfer received: $${amount} ${data.currency} from ${data.fromAgentName} — "${data.description}"`,
       );
+      worldTracker.pushEvent({
+        type: 'transfer_received',
+        summary: `Received $${amount} from ${data.fromAgentName}: "${data.description}"`,
+        timestamp: Date.now(),
+      });
+      triggerReactiveTick(logger, config);
     },
     onLandClaimed: (payload) => {
       logger.info(`Land claimed at (${payload.x}, ${payload.y})`);
+      worldTracker.pushEvent({
+        type: 'land_claimed',
+        summary: `You claimed land at (${payload.x}, ${payload.y})`,
+        timestamp: Date.now(),
+      });
+      triggerReactiveTick(logger, config);
     },
     onLandClaimDenied: (payload) => {
       logger.warn(`Land claim denied: ${payload.reason} (${payload.code})`);
+      worldTracker.pushEvent({
+        type: 'land_claim_denied',
+        summary: `Land claim denied: ${payload.reason}`,
+        timestamp: Date.now(),
+      });
+      triggerReactiveTick(logger, config);
     },
     onLandTradeComplete: (payload) => {
       logger.info(
         `Land trade complete: (${payload.x}, ${payload.y}) from ${payload.fromAgentId} to ${payload.toAgentId}`,
+      );
+      worldTracker.pushEvent({
+        type: 'land_trade',
+        summary: `Land (${payload.x}, ${payload.y}) traded: ${payload.fromAgentId} → ${payload.toAgentId} for ${payload.priceCents} cents`,
+        timestamp: Date.now(),
+      });
+      triggerReactiveTick(logger, config);
+    },
+    onWorldUpdate: (payload) => {
+      worldTracker.updateWorld(payload);
+      logger.debug(
+        `World update: pos=(${payload.position.x}, ${payload.position.y}), balance=${payload.balanceCents}, nearby=${payload.nearbyAgents.length}`,
       );
     },
   });
@@ -114,5 +146,6 @@ export function stopStamnService(): void {
     client.disconnect();
     client = null;
   }
+  worldTracker.clear();
   removeStatusFile();
 }

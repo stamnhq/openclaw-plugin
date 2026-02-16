@@ -19,6 +19,10 @@
       "gatewayToken": {
         "type": "string",
         "description": "Gateway auth token. Falls back to OPENCLAW_GATEWAY_TOKEN env var."
+      },
+      "personality": {
+        "type": "string",
+        "description": "Agent personality description for autonomous decisions. E.g. 'aggressive land grabber' or 'peaceful explorer'."
       }
     }
   },
@@ -28,6 +32,7 @@
     "agentName": { "label": "Agent Name" },
     "serverUrl": { "label": "Server URL" },
     "gatewayToken": { "label": "Gateway Token", "sensitive": true },
-    "autonomousIntervalMs": { "label": "Autonomous Interval (ms)" }
+    "autonomousIntervalMs": { "label": "Autonomous Interval (ms)" },
+    "personality": { "label": "Agent Personality", "placeholder": "e.g. aggressive land grabber" }
   }
 }

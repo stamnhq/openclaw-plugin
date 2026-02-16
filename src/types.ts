@@ -134,6 +134,23 @@ export interface SpendDeniedPayload {
   code: SpendDenialCode;
 }
 
+// ── World Update (pushed by server to individual agents) ─────────────────
+
+export interface AgentWorldUpdatePayload {
+  position: { x: number; y: number };
+  balanceCents: number;
+  ownedLand: { x: number; y: number }[];
+  nearbyAgents: {
+    agentId: string;
+    name: string;
+    x: number;
+    y: number;
+    status: string;
+  }[];
+  nearbyLand: { x: number; y: number; ownerAgentId: string }[];
+  gridSize: number;
+}
+
 // ── Plugin config ────────────────────────────────────────────────────────
 
 export interface StamnConfig {
@@ -145,6 +162,7 @@ export interface StamnConfig {
   autonomousIntervalMs?: number;
   gatewayPort?: number;
   gatewayToken?: string;
+  personality?: string;
 }
 
 // ── OpenClaw plugin API (minimal typing) ─────────────────────────────────

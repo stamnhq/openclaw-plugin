@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import type {
+  AgentWorldUpdatePayload,
   AuthenticatePayload,
   AuthenticatedPayload,
   AuthErrorPayload,
@@ -36,6 +37,7 @@ export interface WSClientEvents {
   onLandClaimed?: (payload: LandClaimedPayload) => void;
   onLandClaimDenied?: (payload: LandClaimDeniedPayload) => void;
   onLandTradeComplete?: (payload: LandTradeCompletePayload) => void;
+  onWorldUpdate?: (payload: AgentWorldUpdatePayload) => void;
 }
 
 export class StamnWSClient {
@@ -240,6 +242,10 @@ export class StamnWSClient {
 
       case 'server:land_trade_complete':
         this.events.onLandTradeComplete?.(payload as LandTradeCompletePayload);
+        break;
+
+      case 'server:world_update':
+        this.events.onWorldUpdate?.(payload as AgentWorldUpdatePayload);
         break;
 
       case 'server:command': {

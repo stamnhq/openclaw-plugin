@@ -91,6 +91,31 @@ export function registerStamnCli(api: PluginApi, config: StamnConfig): void {
         });
 
       stamn
+        .command('set-personality <text>')
+        .description('Set your agent personality for autonomous decisions')
+        .action((text: string) => {
+          const configPath = getConfigPath();
+          let config: Record<string, any> = {};
+          try {
+            const raw = readFileSync(configPath, 'utf-8');
+            config = JSON.parse(raw);
+          } catch {
+            // Start fresh
+          }
+
+          if (!config.plugins) config.plugins = {};
+          if (!config.plugins.entries) config.plugins.entries = {};
+          if (!config.plugins.entries.stamn) config.plugins.entries.stamn = {};
+          if (!config.plugins.entries.stamn.config) config.plugins.entries.stamn.config = {};
+
+          config.plugins.entries.stamn.config.personality = text;
+          writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+
+          console.log(`Personality set: "${text}"`);
+          console.log('Restart the gateway for changes to take effect.');
+        });
+
+      stamn
         .command('status')
         .description('Show Stamn agent connection status')
         .action(async () => {

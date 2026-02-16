@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { PluginApi, MoveDirection, SpendRequestPayload } from './types.js';
 import { getClient } from './service.js';
+import { worldTracker } from './world-state.js';
 
 /** OpenClaw expects tool results as { content: [{ type: 'text', text }] } */
 function toolResult(text: string) {
@@ -34,8 +35,16 @@ export function registerAgentTools(api: PluginApi): void {
       const client = getClient();
       if (!client?.isConnected) return toolResult('Not connected to Stamn server.');
 
-      const direction = (args.direction as string).toLowerCase() as MoveDirection;
-      client.move(direction);
+      // Handle various arg formats from different AI models
+      const raw = args.direction ?? args.dir ?? Object.values(args)[0];
+      const direction = (typeof raw === 'string' ? raw : String(raw ?? '')).toLowerCase().trim();
+      const valid: MoveDirection[] = ['up', 'down', 'left', 'right'];
+
+      if (!direction || !valid.includes(direction as MoveDirection)) {
+        return toolResult(`Invalid direction "${direction}". Use: up, down, left, right. (received args: ${JSON.stringify(args)})`);
+      }
+
+      client.move(direction as MoveDirection);
       return toolResult(`Moved ${direction}.`);
     },
   });
@@ -136,11 +145,19 @@ export function registerAgentTools(api: PluginApi): void {
     execute: async () => {
       const client = getClient();
       if (!client) return toolResult('Stamn plugin not initialized. Check config.');
-      return toolResult(
-        client.isConnected
-          ? 'Connected to Stamn world.'
-          : 'Disconnected from Stamn world (reconnecting...).',
-      );
+      if (!client.isConnected) return toolResult('Disconnected from Stamn world (reconnecting...).');
+
+      const world = worldTracker.getWorld();
+      if (!world) return toolResult('Connected but no world data received yet.');
+
+      const lines = [
+        'Connected to Stamn world.',
+        `Position: (${world.position.x}, ${world.position.y})`,
+        `Balance: ${world.balanceCents} cents`,
+        `Owned land: ${world.ownedLand.length} parcels`,
+        `Nearby agents: ${world.nearbyAgents.length}`,
+      ];
+      return toolResult(lines.join('\n'));
     },
   });
 }
